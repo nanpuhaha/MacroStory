@@ -66,8 +66,7 @@ class SetKeyMap(tk.Toplevel):
 
     def keysym2dik(self, keysym):
         try:
-            dik = keysym_map[keysym]
-            return dik
+            return keysym_map[keysym]
         except:
             return 0
 
@@ -85,7 +84,7 @@ class SetKeyMap(tk.Toplevel):
                 found = True
                 break
         if not found:
-            showwarning("키설정", "현재 지원하지 않는 키입니다. 기본 키로 초기화 됩니다."+str(event.keysym))
+            showwarning("키설정", f"현재 지원하지 않는 키입니다. 기본 키로 초기화 됩니다.{str(event.keysym)}")
             self.keymap_data[key_name] = DEFAULT_KEY_MAP[key_name]
             self.labels[key_name].set(self.dik2keysym(DEFAULT_KEY_MAP[key_name][0]))
 
@@ -131,7 +130,7 @@ def macro_loop(input_queue, output_queue):
         while True:
             if not input_queue.empty():
                 command = input_queue.get()
-                logger.debug("recieved command {}".format(command))
+                logger.debug(f"recieved command {command}")
                 if command[0] == "start":
                     logger.debug("starting MacroController...")
                     keymap = command[1]
@@ -185,8 +184,12 @@ class MainScreen(tk.Frame):
         self.macro_pid_infotext = tk.StringVar()
         self.macro_pid_infotext.set("실행되지 않음")
 
-        tk.Label(self.auth_info_frame, text="아이디: %s"%(self.user_id)).pack(side=TOP)
-        tk.Label(self.auth_info_frame, text="만료시간: %s"%(time.strftime('%Y %m %d %H:%M:%S', time.localtime(self.expiration_time)))).pack(side=BOTTOM)
+        tk.Label(self.auth_info_frame, text=f"아이디: {self.user_id}").pack(side=TOP)
+        tk.Label(
+            self.auth_info_frame,
+            text=f"만료시간: {time.strftime('%Y %m %d %H:%M:%S', time.localtime(self.expiration_time))}",
+        ).pack(side=BOTTOM)
+
 
         self.log_text_area = ScrolledText(self, height = 10, width = 20)
         self.log_text_area.pack(side=BOTTOM, expand=YES, fill=BOTH)
@@ -227,7 +230,7 @@ class MainScreen(tk.Frame):
         while not self.macro_process_in_queue.empty():
             output = self.macro_process_in_queue.get()
             if output[0] == "log":
-                self.log("Process - "+str(output[1]))
+                self.log(f"Process - {str(output[1])}")
             elif output[0] == "stopped":
                 self.log("매크로가 완전히 종료되었습니다.")
         self.after(1000, self.check_input_queue)
@@ -254,32 +257,31 @@ class MainScreen(tk.Frame):
     def start_macro(self):
         if not self.macro_process:
             self.toggle_macro_process()
-        keymap = self.get_keymap()
-        if not keymap:
-            showerror(APP_TITLE, "키설정을 읽어오지 못했습니다. 키를 다시 설정해주세요.")
-        else:
+        if keymap := self.get_keymap():
             if not self.platform_file_dir.get():
                 showwarning(APP_TITLE, "지형 파일을 선택해 주세요.")
-            else:
-                if not MapleScreenCapturer().ms_get_screen_hwnd():
-                    showwarning(APP_TITLE, "메이플 창을 찾지 못했습니다. 메이플을 실행해 주세요")
+            elif MapleScreenCapturer().ms_get_screen_hwnd():
+
+                cap = MapleScreenCapturer()
+                hwnd = cap.ms_get_screen_hwnd()
+                rect = cap.ms_get_screen_rect(hwnd)
+                self.log("MS hwnd", hwnd)
+                self.log("MS rect", rect)
+                self.log("Out Queue put:", self.platform_file_dir.get())
+                if rect[0] < 0 or rect[1] < 0:
+                    showwarning(APP_TITLE, "메이플 창 위치를 가져오는데 실패했습니다.\n메이플 촹의 좌측 상단 코너가 화면 내에 있도록 메이플 창을 움직여주세요.")
+
                 else:
+                    cap.capture()
+                    self.macro_process_out_queue.put(("start", keymap, self.platform_file_dir.get()))
+                    self.macro_start_button.configure(state=DISABLED)
+                    self.macro_end_button.configure(state=NORMAL)
+                    self.platform_file_button.configure(state=DISABLED)
 
-                    cap = MapleScreenCapturer()
-                    hwnd = cap.ms_get_screen_hwnd()
-                    rect = cap.ms_get_screen_rect(hwnd)
-                    self.log("MS hwnd", hwnd)
-                    self.log("MS rect", rect)
-                    self.log("Out Queue put:", self.platform_file_dir.get())
-                    if rect[0] < 0 or rect[1] < 0:
-                        showwarning(APP_TITLE, "메이플 창 위치를 가져오는데 실패했습니다.\n메이플 촹의 좌측 상단 코너가 화면 내에 있도록 메이플 창을 움직여주세요.")
-
-                    else:
-                        cap.capture()
-                        self.macro_process_out_queue.put(("start", keymap, self.platform_file_dir.get()))
-                        self.macro_start_button.configure(state=DISABLED)
-                        self.macro_end_button.configure(state=NORMAL)
-                        self.platform_file_button.configure(state=DISABLED)
+            else:
+                showwarning(APP_TITLE, "메이플 창을 찾지 못했습니다. 메이플을 실행해 주세요")
+        else:
+            showerror(APP_TITLE, "키설정을 읽어오지 못했습니다. 키를 다시 설정해주세요.")
 
     def stop_macro(self):
         self.macro_process_out_queue.put(("stop",))
@@ -301,9 +303,7 @@ class MainScreen(tk.Frame):
 
 
     def log(self, *args):
-        res_txt = []
-        for arg in args:
-            res_txt.append(str(arg))
+        res_txt = [str(arg) for arg in args]
         self.log_text_area.insert(END, " ".join(res_txt)+"\n")
         self.log_text_area.see(END)
 
@@ -344,8 +344,11 @@ class MainScreen(tk.Frame):
             self.macro_process_toggle_button.configure(text="실행하기")
 
     def onPlatformFileSelect(self):
-        platform_file_path = askopenfilename(initialdir=os.getcwd(), title="지형파일 선택", filetypes=(("지형 파일(*.platform)", "*.platform"),))
-        if platform_file_path:
+        if platform_file_path := askopenfilename(
+            initialdir=os.getcwd(),
+            title="지형파일 선택",
+            filetypes=(("지형 파일(*.platform)", "*.platform"),),
+        ):
             if os.path.exists(platform_file_path):
                 with open(platform_file_path, "rb") as f:
                     try:
@@ -383,7 +386,10 @@ class AuthScreen(tk.Frame):
         elif auth_res[0] == 1:
             tk.Label(self, text="PC 인증 안내").grid(row=0, column=0, columnspan=2)
             tk.Label(self, text="등록되지 않은 PC입니다. 구매자인 경우 PC등록을 진행해주시고, 비구매자인 경우 카카오톡으로 문의 바랍니다(등록사이트에 링크있음).").grid(row=1, column=0, columnspan=2)
-            tk.Label(self, text="PC이름: %s"%(str(os.getenv("COMPUTERNAME")))).grid(row=2, column=0, columnspan=2)
+            tk.Label(self, text=f'PC이름: {str(os.getenv("COMPUTERNAME"))}').grid(
+                row=2, column=0, columnspan=2
+            )
+
             tk.Label(self, text="아이디").grid(row=3, column=0)
             tk.Entry(self, textvariable=self.userid_input).grid(row=3, column=1)
             tk.Label(self, text="비밀번호").grid(row=4, column=0)

@@ -46,13 +46,12 @@ def add_pc(username, password):
         return -1, "fail"
 
     if data["result"] == "fail":
-        if data["result"] == "fail":
-            if data["type"] == "too_many_pc":
+        if data["type"] == "too_many_pc":
 
-                return 0, int(data["maxcount"]), int(data["currentcount"])
+            return 0, int(data["maxcount"]), int(data["currentcount"])
 
-            elif data["type"] == "auth_error":
-                return 1, "auth_error"
+        elif data["type"] == "auth_error":
+            return 1, "auth_error"
 
     elif data["result"] == "success":
         return 2, int(data["maxcount"]), int(data["currentcount"])

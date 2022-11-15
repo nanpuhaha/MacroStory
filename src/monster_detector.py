@@ -32,17 +32,25 @@ class MonsterTemplateDetector:
                 return 0
         else:
             assert src_gray_img_arr.shape[0] > self.template.shape[0] and src_gray_img_arr.shape[1] > self.template.shape[1], "Search image is smaller than template!"
-        detected_points = []
         template_matcher = cv2.matchTemplate(src_gray_img_arr, self.template, cv2.TM_CCOEFF_NORMED)
         loc = np.where(template_matcher >= search_threshold)
-        for point in zip(*loc[::-1]):
-            detected_points.append((point[0]+self.template_calibrated_xcoords, point[1]+self.template_calibrated_ycoords))
+        detected_points = [
+            (
+                point[0] + self.template_calibrated_xcoords,
+                point[1] + self.template_calibrated_ycoords,
+            )
+            for point in zip(*loc[::-1])
+        ]
 
         template_matcher = cv2.matchTemplate(src_gray_img_arr, self.template_flipped, cv2.TM_CCOEFF_NORMED)
         loc = np.where(template_matcher >= search_threshold)
-        for point in zip(*loc[::-1]):
-            detected_points.append(
-                (point[0] + self.template_calibrated_xcoords, point[1] + self.template_calibrated_ycoords))
+        detected_points.extend(
+            (
+                point[0] + self.template_calibrated_xcoords,
+                point[1] + self.template_calibrated_ycoords,
+            )
+            for point in zip(*loc[::-1])
+        )
 
         return detected_points
 

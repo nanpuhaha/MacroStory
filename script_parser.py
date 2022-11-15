@@ -69,7 +69,7 @@ class ScriptReader:
         self.unparsed_lines = []
         self.definitions = []
         with open(self.filedir, "r") as f:
-            for line in f.readlines():
+            for line in f:
                 line = line.strip("\n")
                 delimeted = line.split(" ")
                 if delimeted[0] == "define":
@@ -78,9 +78,12 @@ class ScriptReader:
                     self.unparsed_lines.append(delimeted)
 
 
-        for line in self.unparsed_lines:
-            if line[0] == "define":
-                self.definitions.append([line[1], line[2]])
+        self.definitions.extend(
+            [line[1], line[2]]
+            for line in self.unparsed_lines
+            if line[0] == "define"
+        )
+
         print(self.definitions)
         for line in self.unparsed_lines:
             tmp_arr = []

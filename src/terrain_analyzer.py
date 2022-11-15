@@ -104,18 +104,17 @@ class PathAnalyzer:
         :param filename: file path
         :return: 0 if valid, 1 if corrupt or errored
         """
-        if os.path.exists(filename):
-            with open(filename, "rb") as f:
-                try:
-                    data = pickle.load(f)
-                    platforms = data["platforms"]
-                    oneway_platforms = data["oneway"]
-                    minimap_coords = data["minimap"]
-                except:
-                    return 1
-            return minimap_coords
-        else:
+        if not os.path.exists(filename):
             return 1
+        with open(filename, "rb") as f:
+            try:
+                data = pickle.load(f)
+                platforms = data["platforms"]
+                oneway_platforms = data["oneway"]
+                minimap_coords = data["minimap"]
+            except:
+                return 1
+        return minimap_coords
 
 
     def hash(self, data):
@@ -142,11 +141,12 @@ class PathAnalyzer:
             start_platform = self.oneway_platforms[start_hash]
         max_steps = len(self.platforms) + len(self.oneway_platforms) + 2
         calculated_paths = []
-        bfs_queue = []
         visited_platform_hashes = []
-        for solution in start_platform.solutions:
-            if solution.to_hash not in visited_platform_hashes:
-                bfs_queue.append([solution, [solution]])
+        bfs_queue = [
+            [solution, [solution]]
+            for solution in start_platform.solutions
+            if solution.to_hash not in visited_platform_hashes
+        ]
 
         while bfs_queue:
             current_solution, paths = bfs_queue.pop()
@@ -165,11 +165,10 @@ class PathAnalyzer:
                     cv.append(solution)
                     bfs_queue.append([solution, cv])
 
-        if calculated_paths:
-            print(calculated_paths)
-            return sorted(calculated_paths, key=lambda x: len(x))[0]
-        else:
+        if not calculated_paths:
             return 0
+        print(calculated_paths)
+        return sorted(calculated_paths, key=lambda x: len(x))[0]
 
 
     def calculate_navigation_map(self):
@@ -193,15 +192,12 @@ class PathAnalyzer:
                     self.platforms[solution.to_hash].last_visit = 0
                     method.visited = True
 
-                else:
-                    if not method.visited:
-                        need_reset = False
+                elif not method.visited:
+                    need_reset = False
         except:
             need_reset = False
-            pass
-
         for key, platform in self.platforms.items():
-            if key != to_platform and key != from_platform:
+            if key not in [to_platform, from_platform]:
                 self.platforms[key].last_visit += 1
         if need_reset:
             for method in self.platforms[from_platform].solutions:
@@ -343,34 +339,28 @@ class PathAnalyzer:
         """
 
         return_map_dict = []
-        if oneway:
-            platform = self.oneway_platforms[hash]
-        else:
-            platform = self.platforms[hash]
+        platform = self.oneway_platforms[hash] if oneway else self.platforms[hash]
         platform.solutions = []
         for key, other_platform in self.platforms.items():
             if platform.hash != key:
-                # 1. Detect vertical overlaps
                 if platform.start_x < other_platform.end_x and platform.end_x > other_platform.start_x or \
-                        platform.start_x > other_platform.start_x and platform.start_x < other_platform.end_x:
-                    lower_bound_x = max(platform.start_x, other_platform.start_x)
+                            platform.start_x > other_platform.start_x and platform.start_x < other_platform.end_x:
                     upper_bound_x = min(platform.end_x, other_platform.end_x)
+                    lower_bound_x = max(platform.start_x, other_platform.start_x)
                     if platform.start_y < other_platform.end_y:
                         # Platform is higher than current_platform. Thus we can just drop
                         #solution = {"hash":key, "lower_bound":(lower_bound_x, platform.start_y), "upper_bound":(upper_bound_x, platform.start_y), "method":"drop", "visited" : False}
                         solution = Solution(platform.hash, key, (lower_bound_x, platform.start_y), (upper_bound_x, platform.start_y), METHOD_DROP, False)
                         # Changed to using classes for readability
                         platform.solutions.append(solution)
-                    else:
-                        # We need to use double jump to get there, but first check if within jump height
-                        if abs(platform.start_y - other_platform.start_y) <= self.dbljump_half_height:
-                            #solution = {"hash":key, "lower_bound":(lower_bound_x, platform.start_y), "upper_bound":(upper_bound_x, platform.start_y), "method":"dbljmp_half", "visited" : False}
-                            solution = Solution(platform.hash, key, (lower_bound_x, platform.start_y), (upper_bound_x, platform.start_y), METHOD_DBLJMP_HALF, False)
-                            platform.solutions.append(solution)
-                        elif abs(platform.start_y - other_platform.start_y) <= self.dbljump_max_height:
-                            #solution = {"hash": key, "lower_bound": (lower_bound_x, platform.start_y),"upper_bound": (upper_bound_x, platform.start_y), "method": "dbljmp_max", "visited" : False}
-                            solution = Solution(platform.hash, key, (lower_bound_x, platform.start_y), (upper_bound_x, platform.start_y), METHOD_DBLJMP_MAX, False)
-                            platform.solutions.append(solution)
+                    elif abs(platform.start_y - other_platform.start_y) <= self.dbljump_half_height:
+                        #solution = {"hash":key, "lower_bound":(lower_bound_x, platform.start_y), "upper_bound":(upper_bound_x, platform.start_y), "method":"dbljmp_half", "visited" : False}
+                        solution = Solution(platform.hash, key, (lower_bound_x, platform.start_y), (upper_bound_x, platform.start_y), METHOD_DBLJMP_HALF, False)
+                        platform.solutions.append(solution)
+                    elif abs(platform.start_y - other_platform.start_y) <= self.dbljump_max_height:
+                        #solution = {"hash": key, "lower_bound": (lower_bound_x, platform.start_y),"upper_bound": (upper_bound_x, platform.start_y), "method": "dbljmp_max", "visited" : False}
+                        solution = Solution(platform.hash, key, (lower_bound_x, platform.start_y), (upper_bound_x, platform.start_y), METHOD_DBLJMP_MAX, False)
+                        platform.solutions.append(solution)
                 else:
                     # 2. No vertical overlaps. Calculate euclidean distance between each platform endpoints
                     front_point_distance = math.sqrt((platform.start_x-other_platform.end_x)**2 + (platform.start_y-other_platform.end_y)**2)
